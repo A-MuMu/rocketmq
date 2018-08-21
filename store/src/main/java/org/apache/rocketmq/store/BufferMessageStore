@@ -1,0 +1,128 @@
+package org.apache.rocketmq.store;
+
+import org.apache.rocketmq.common.constant.LoggerName;
+import org.apache.rocketmq.common.message.MessageExt;
+import org.apache.rocketmq.common.message.MessageExtBatch;
+import org.apache.rocketmq.logging.InternalLogger;
+import org.apache.rocketmq.logging.InternalLoggerFactory;
+import org.apache.rocketmq.store.config.StorePathConfigHelper;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+
+public class BufferMessageStore implements MessageStore {
+    private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
+
+/**
+ * ii.	可以只实现最基本的接口
+ * 1.	start
+ * 2.	shutdown
+ * 3.	putMessage
+ * 4.	getMessage
+ * 5.	getMaxOffsetInQueue
+ * 6.	getMinOffsetInQueue
+ * 7.	getCommitLogOffsetInQueue
+ * 8.	lookMessagByOffset
+ * 9.	getCommitLogData
+ */
+    private final ConcurrentMap<String/* topic */, ConcurrentMap<Integer/* queueId */, ConsumeQueue>> consumeQueueTable;
+    private ByteBuffer buffer;
+    private final int size;
+    private boolean shutdown;
+    private final int position;
+    private final int mark;
+    private final int limit;
+
+    private int writeOffset;
+    private int writeLength;
+
+    //factory
+
+
+    public BufferMessageStore(ConcurrentMap<String, ConcurrentMap<Integer, ConsumeQueue>> consumeQueueTable, ByteBuffer buffer, int size, boolean shutdown, int position, int mark, int limit, int writeOffset, int writeLength) {
+        this.consumeQueueTable = consumeQueueTable;
+        this.buffer = buffer;
+        this.size = size;
+        this.shutdown = shutdown;
+        this.position = position;
+        this.mark = mark;
+        this.limit = limit;
+        this.writeOffset = writeOffset;
+        this.writeLength = writeLength;
+    }
+
+    /**
+     * @throws IOException
+     */
+
+    @Override
+    public void start() throws Exception {
+        buffer = ByteBuffer.allocateDirect(size);
+
+        this.shutdown = false;
+    }
+
+    @Override
+    public void shutdown() {
+        if (!shutdown){
+            this.shutdown = true;
+            Runtime.getRuntime().freeMemory();
+        }
+
+    }
+
+    public ByteBuffer putMessage(MessageExtBrokerInner msg) {
+        if (this.shutdown) {
+            log.warn("message store has shutdown, so putMessage is forbidden");
+        }
+
+        if (position >= size){
+            log.warn("buffer is full");
+        }
+
+        buffer = buffer.wrap(msg.toString().getBytes(), writeOffset, msg.toString().getBytes().length;
+        writeOffset += msg.toString().getBytes().length;
+
+        return buffer;
+    }
+
+    public ByteBuffer getMessage(ByteBuffer buffer, int offset, int length) {
+        byte[] temp = buffer.array();
+        ByteBuffer result = buffer.get(temp,offset,length);
+        return result;
+    }
+
+
+
+
+    @Override
+    public long getMaxOffsetInQueue(String topic, int queueId) {
+        ConsumeQueue logic = this.findConsumeQueue(topic, queueId);
+        if (logic != null) {
+            long offset = logic.getMaxOffsetInQueue();
+            return offset;
+        }
+
+        return 0;
+    }
+
+
+    @Override
+    public long getMinOffsetInQueue(String topic, int queueId) {
+        return 0;
+    }
+
+    @Override
+    public MessageExt lookMessageByOffset(long commitLogOffset) {
+        return null;
+    }
+
+    public boolean load() {
+        return true;
+    }
+}

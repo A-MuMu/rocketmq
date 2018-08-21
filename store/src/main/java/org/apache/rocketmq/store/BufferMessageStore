@@ -1,11 +1,14 @@
 package org.apache.rocketmq.store;
 
+import org.apache.rocketmq.common.BrokerConfig;
 import org.apache.rocketmq.common.constant.LoggerName;
 import org.apache.rocketmq.common.message.MessageExt;
 import org.apache.rocketmq.common.message.MessageExtBatch;
 import org.apache.rocketmq.logging.InternalLogger;
 import org.apache.rocketmq.logging.InternalLoggerFactory;
+import org.apache.rocketmq.store.config.MessageStoreConfig;
 import org.apache.rocketmq.store.config.StorePathConfigHelper;
+import org.apache.rocketmq.store.stats.BrokerStatsManager;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -15,7 +18,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
-public class BufferMessageStore implements MessageStore {
+public class BufferMessageStore extends DefaultMessageStore {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
 
 /**
@@ -44,7 +47,8 @@ public class BufferMessageStore implements MessageStore {
     //factory
 
 
-    public BufferMessageStore(ConcurrentMap<String, ConcurrentMap<Integer, ConsumeQueue>> consumeQueueTable, ByteBuffer buffer, int size, boolean shutdown, int position, int mark, int limit, int writeOffset, int writeLength) {
+    public BufferMessageStore(MessageStoreConfig messageStoreConfig, BrokerStatsManager brokerStatsManager, MessageArrivingListener messageArrivingListener, BrokerConfig brokerConfig, ConcurrentMap<String, ConcurrentMap<Integer, ConsumeQueue>> consumeQueueTable, ByteBuffer buffer, int size, boolean shutdown, int position, int mark, int limit, int writeOffset, int writeLength) throws IOException {
+        super(messageStoreConfig, brokerStatsManager, messageArrivingListener, brokerConfig);
         this.consumeQueueTable = consumeQueueTable;
         this.buffer = buffer;
         this.size = size;
@@ -76,7 +80,7 @@ public class BufferMessageStore implements MessageStore {
 
     }
 
-    public ByteBuffer putMessage(MessageExtBrokerInner msg) {
+    public PutMessageResult putMessage(MessageExtBrokerInner msg) {
         if (this.shutdown) {
             log.warn("message store has shutdown, so putMessage is forbidden");
         }
@@ -85,10 +89,10 @@ public class BufferMessageStore implements MessageStore {
             log.warn("buffer is full");
         }
 
-        buffer = buffer.wrap(msg.toString().getBytes(), writeOffset, msg.toString().getBytes().length;
+        buffer = buffer.wrap(msg.toString().getBytes(), writeOffset, msg.toString().getBytes().length);
         writeOffset += msg.toString().getBytes().length;
 
-        return buffer;
+        return new PutMessageResult(PutMessageStatus.PUT_OK, null);
     }
 
     public ByteBuffer getMessage(ByteBuffer buffer, int offset, int length) {
@@ -97,17 +101,13 @@ public class BufferMessageStore implements MessageStore {
         return result;
     }
 
+    @Override
+    public void destroy() {
 
-
+    }
 
     @Override
     public long getMaxOffsetInQueue(String topic, int queueId) {
-        ConsumeQueue logic = this.findConsumeQueue(topic, queueId);
-        if (logic != null) {
-            long offset = logic.getMaxOffsetInQueue();
-            return offset;
-        }
-
         return 0;
     }
 
@@ -125,4 +125,6 @@ public class BufferMessageStore implements MessageStore {
     public boolean load() {
         return true;
     }
+
+
 }
